@@ -3,6 +3,8 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\BurgerController;
 use App\Http\Controllers\OrderController;
+use App\Http\Controllers\PaymentController;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -19,8 +21,11 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+
+Route::resource('payments', PaymentController::class);
 Route::resource('orders', OrderController::class);
 
 Route::resource('burgers', BurgerController::class);
 Route::post('burgers/{burger}/archive', [BurgerController::class, 'archive'])->name('burgers.archive');
+
 

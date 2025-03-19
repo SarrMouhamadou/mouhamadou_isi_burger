@@ -11,6 +11,12 @@ class Payment extends Model
 
     protected $fillable = ['order_id', 'amount', 'payment_date'];
 
+    protected $casts = [
+        'payment_date' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+    ];
+
     public function order()
     {
         return $this->belongsTo(Order::class);
