@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Burger extends Model
 {
-    protected $fillable = ['name', 'price', 'image', 'description', 'stock' ];
+    protected $fillable = ['name', 'price', 'image', 'description', 'stock', 'archived' ];
 
     public function orders()
     {
@@ -15,5 +15,12 @@ class Burger extends Model
                     ->withPivot('quantity', 'unit_price')
                     ->withTimestamps();
     }
+
+    public function isAvailable()
+    {
+        return $this->stock > 0 && !$this->archived;
+    }
     use HasFactory;
+
+
 }
