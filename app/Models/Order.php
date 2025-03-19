@@ -7,16 +7,20 @@ use Illuminate\Database\Eloquent\Model;
 
 class Order extends Model
 {
-    protected $fillable = ['user_id', 'status', 'total'];
+    protected $fillable = ['user_id', 'customer_name', 'customer_email', 'status', 'total'];
+
+    protected $casts = [
+        'total' => 'decimal:2',
+    ];
 
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
-    public function burger()
+    public function burgers()
     {
-        return $this->belongsToMany(Burger::class)
+        return $this->belongsToMany(Burger::class, 'order_burger')
                     ->withPivot('quantity', 'unit_price')
                     ->withTimestamps();
     }

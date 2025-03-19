@@ -11,7 +11,7 @@ class Burger extends Model
 
     public function orders()
     {
-        return $this->belongsToMany(Order::class)
+        return $this->belongsToMany(Order::class, 'order_burger')
                     ->withPivot('quantity', 'unit_price')
                     ->withTimestamps();
     }
