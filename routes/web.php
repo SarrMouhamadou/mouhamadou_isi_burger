@@ -1,10 +1,7 @@
 <?php
 
+use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\BurgerController;
-use App\Http\Controllers\OrderController;
-use App\Http\Controllers\PaymentController;
-
 
 /*
 |--------------------------------------------------------------------------
@@ -17,15 +14,32 @@ use App\Http\Controllers\PaymentController;
 |
 */
 
+// Page d'accueil
 Route::get('/', function () {
     return view('welcome');
 });
 
+// Dashboard (après connexion)
+Route::get('/dashboard', function () {
+    return view('dashboard');
+})->middleware(['auth', 'verified'])->name('dashboard');
 
-Route::resource('payments', PaymentController::class);
-Route::resource('orders', OrderController::class);
+// Routes de gestion de profil (générées par Breeze)
+Route::middleware('auth')->group(function () {
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+});
 
-Route::resource('burgers', BurgerController::class);
-Route::post('burgers/{burger}/archive', [BurgerController::class, 'archive'])->name('burgers.archive');
+// Routes pour les ressources (burgers, orders, payments)
+Route::middleware(['auth', 'verified'])->group(function () {
+    // Routes accessibles uniquement aux gestionnaires
+    Route::middleware('role:gestionnaire')->group(function () {
+        Route::resource('burgers', \App\Http\Controllers\BurgerController::class);
+        Route::resource('orders', \App\Http\Controllers\OrderController::class);
+        Route::resource('payments', \App\Http\Controllers\PaymentController::class);
+    });
+});
 
-
+// Routes d'authentification (générées par Breeze)
+require __DIR__.'/auth.php';
