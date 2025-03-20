@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AdminDashboardController;
+use App\Http\Controllers\AdminGestionnaireController;
 
 /*
 |--------------------------------------------------------------------------
@@ -33,6 +35,22 @@ Route::middleware('auth')->group(function () {
 
 // Routes pour les ressources (burgers, orders, payments)
 Route::middleware(['auth', 'verified'])->group(function () {
+    // Routes accessibles uniquement à l'Admin
+    Route::prefix('admin')->middleware('role:admin')->group(function () {
+        Route::get('/dashboard', [AdminDashboardController::class, 'index'])->name('dashboard');
+
+        // Routes API pour charger les données dynamiquement
+        Route::get('/data/dashboard', [AdminDashboardController::class, 'dashboardData']);
+        Route::get('/data/gestionnaires', [AdminDashboardController::class, 'gestionnairesData']);
+        Route::get('/data/actifs', [AdminDashboardController::class, 'actifsData']);
+        Route::get('/data/desactives', [AdminDashboardController::class, 'desactivesData']);
+        Route::get('/data/ajouter', [AdminDashboardController::class, 'ajouterData']);
+
+        // Routes pour les actions sur les gestionnaires
+        Route::post('/gestionnaires', [AdminGestionnaireController::class, 'store']);
+        Route::get('/gestionnaires/{gestionnaire}', [AdminGestionnaireController::class, 'show']);
+    });
+
     // Routes accessibles uniquement aux gestionnaires
     Route::middleware('role:gestionnaire')->group(function () {
         Route::resource('burgers', \App\Http\Controllers\BurgerController::class);
