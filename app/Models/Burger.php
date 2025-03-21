@@ -7,12 +7,21 @@ use Illuminate\Database\Eloquent\Model;
 
 class Burger extends Model
 {
-    protected $fillable = ['name', 'price', 'image', 'description', 'stock', 'archived' ];
+    use HasFactory;
+
+    protected $fillable = [
+        'name',
+        'price',
+        'image',
+        'description',
+        'stock',
+        'archived',
+        'category', // Ajout de la colonne category
+    ];
 
     public function orders()
     {
-        return $this->belongsToMany(Order::class, 'order_burgerq
-        q')
+        return $this->belongsToMany(Order::class, 'order_burger')
                     ->withPivot('quantity', 'unit_price')
                     ->withTimestamps();
     }
@@ -21,7 +30,4 @@ class Burger extends Model
     {
         return $this->stock > 0 && !$this->archived;
     }
-    use HasFactory;
-
-
 }

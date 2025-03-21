@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
@@ -19,6 +20,10 @@ class NewPasswordController extends Controller
      */
     public function create(Request $request): View
     {
+        if (Auth::check()) {
+            Auth::logout();
+        }
+
         return view('auth.reset-password', ['request' => $request]);
     }
 
@@ -35,9 +40,7 @@ class NewPasswordController extends Controller
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
 
-        // Here we will attempt to reset the user's password. If it is successful we
-        // will update the password on an actual user model and persist it to the
-        // database. Otherwise we will parse the error and return the response.
+        // Attempt to reset the user's password
         $status = Password::reset(
             $request->only('email', 'password', 'password_confirmation', 'token'),
             function ($user) use ($request) {
@@ -50,12 +53,28 @@ class NewPasswordController extends Controller
             }
         );
 
-        // If the password was successfully reset, we will redirect the user back to
-        // the application's home authenticated view. If there is an error we can
-        // redirect them back to where they came from with their error message.
-        return $status == Password::PASSWORD_RESET
-                    ? redirect()->route('login')->with('status', __($status))
-                    : back()->withInput($request->only('email'))
-                            ->withErrors(['email' => __($status)]);
+        // If the password was successfully reset, redirect based on the user's role
+        if ($status == Password::PASSWORD_RESET) {
+            // Connecte l'utilisateur après la réinitialisation
+            $user = \App\Models\User::where('email', $request->email)->first();
+            Auth::login($user);
+
+            // Si c'est un gestionnaire, rediriger vers la page de mise à jour des informations
+            if ($user->role->name === 'gestionnaire') {
+                return redirect()->route('profile.edit')->with('status', 'Mot de passe défini avec succès. Veuillez mettre à jour vos informations.');
+            }
+
+            // Redirection pour les admins
+            if ($user->role->name === 'admin') {
+                return redirect()->route('admin.dashboard')->with('status', 'Mot de passe réinitialisé avec succès.');
+            }
+
+            // Redirection par défaut pour les autres rôles
+            return redirect()->route('dashboard')->with('status', __($status));
+        }
+
+        // Si la réinitialisation échoue, retourne à la page précédente avec une erreur
+        return back()->withInput($request->only('email'))
+                     ->withErrors(['email' => __($status)]);
     }
 }

@@ -26,15 +26,25 @@ class ProfileController extends Controller
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
-        $request->user()->fill($request->validated());
+        $user = $request->user();
+        $user->fill($request->validated());
 
-        if ($request->user()->isDirty('email')) {
-            $request->user()->email_verified_at = null;
+        if ($user->isDirty('email')) {
+            $user->email_verified_at = null;
         }
 
-        $request->user()->save();
+        $user->save();
 
-        return Redirect::route('profile.edit')->with('status', 'profile-updated');
+        // Si c'est un gestionnaire qui vient de mettre à jour ses informations après la réinitialisation
+        if ($user->role->name === 'gestionnaire' &&
+            $request->session()->has('status') &&
+            str_contains($request->session()->get('status'), 'Mot de passe défini')) {
+            return Redirect::route('gestionnaire.dashboard')
+                ->with('status', 'Profil mis à jour avec succès. Bienvenue sur votre tableau de bord !');
+        }
+
+        return Redirect::route('profile.edit')
+            ->with('status', 'profile-updated');
     }
 
     /**

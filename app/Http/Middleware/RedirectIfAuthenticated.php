@@ -17,6 +17,15 @@ class RedirectIfAuthenticated
      */
     public function handle(Request $request, Closure $next, string ...$guards): Response
     {
+        // Si la route est pour réinitialiser le mot de passe, déconnecter l'utilisateur actuel
+        if ($request->is('reset-password-and-profile*')) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+            return $next($request);
+        }
+
+        // Sinon, comportement normal du middleware
         $guards = empty($guards) ? [null] : $guards;
 
         foreach ($guards as $guard) {

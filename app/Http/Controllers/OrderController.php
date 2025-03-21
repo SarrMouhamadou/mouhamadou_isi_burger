@@ -4,15 +4,18 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Models\Burger;
+use App\Models\Payment;
+use App\Notifications\OrderReadyNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use PDF;
 
 class OrderController extends Controller
 {
     public function index()
     {
-        $orders = Order::with('burgers')->get();
-        return view('orders.index', compact('orders'));
+        $orders = Order::with('burgers', 'user')->latest()->paginate(10);
+        return view('gestionnaire.orders.index', compact('orders'));
     }
 
     public function create()
@@ -36,8 +39,8 @@ class OrderController extends Controller
             'user_id' => Auth::id() ?? null,
             'customer_name' => $validated['customer_name'],
             'customer_email' => $validated['customer_email'],
-            'status' => 'en_attente',
-            'total' => 0,
+            'status' => 'En attente',
+            'total_amount' => 0,
         ]);
 
         foreach ($validated['burgers'] as $item) {
@@ -53,13 +56,14 @@ class OrderController extends Controller
             }
         }
 
-        $order->update(['total' => $total]);
+        $order->update(['total_amount' => $total]);
         return redirect()->route('orders.index')->with('success', 'Commande créée avec succès.');
     }
 
     public function show(Order $order)
     {
-        return view('orders.show', compact('order'));
+        $order->load('burgers', 'user');
+        return view('gestionnaire.orders.show', compact('order'));
     }
 
     public function edit(Order $order)
@@ -70,17 +74,44 @@ class OrderController extends Controller
     public function update(Request $request, Order $order)
     {
         $validated = $request->validate([
-            'status' => 'required|in:en_attente,en_preparation,prete,payee',
+            'status' => ['required', 'in:En attente,En préparation,Prête,Payée,Annulée'],
         ]);
 
-        $order->update($validated);
-        return redirect()->route('orders.index')->with('success', 'Statut mis à jour.');
+        $oldStatus = $order->status;
+        $order->status = $validated['status'];
+        $order->save();
+
+        // Si le statut passe à "Prête", envoyer un email avec la facture en PDF
+        if ($validated['status'] === 'Prête' && $oldStatus !== 'Prête') {
+            // Générer la facture PDF
+            $pdf = PDF::loadView('gestionnaire.orders.invoice', compact('order'));
+            $pdfPath = storage_path('app/public/invoices/invoice-' . $order->id . '.pdf');
+            $pdf->save($pdfPath);
+
+            // Envoyer la notification
+            if ($order->user) {
+                $order->user->notify(new OrderReadyNotification($order, $pdfPath));
+            }
+        }
+
+        // Si le statut passe à "Payée", enregistrer le paiement
+        if ($validated['status'] === 'Payée' && $oldStatus !== 'Payée') {
+            Payment::create([
+                'order_id' => $order->id,
+                'amount' => $order->total_amount,
+                'payment_date' => now(),
+                'payment_method' => 'Espèces',
+            ]);
+        }
+
+        return redirect()->back()->with('success', 'Statut de la commande mis à jour avec succès.');
     }
 
     public function destroy(Order $order)
     {
-        $order->burgers()->detach();
-        $order->delete();
-        return redirect()->route('orders.index')->with('success', 'Commande supprimée.');
+        // Au lieu de supprimer, on annule la commande
+        $order->status = 'Annulée';
+        $order->save();
+        return redirect()->route('orders.index')->with('success', 'Commande annulée avec succès.');
     }
 }

@@ -18,46 +18,70 @@ class AdminDashboardController extends Controller
         return view('admin.dashboard');
     }
 
-    public function dashboardData()
+    public function data($section, Request $request)
     {
+        // Récupérer le rôle "gestionnaire"
         $gestionnaireRole = Role::where('name', 'gestionnaire')->firstOrFail();
-        $totalGestionnaires = User::where('role_id', $gestionnaireRole->id)->count();
-        $activeGestionnaires = User::where('role_id', $gestionnaireRole->id)->where('is_active', true)->count();
-        $inactiveGestionnaires = User::where('role_id', $gestionnaireRole->id)->where('is_active', false)->count();
-        $gestionnaires = User::where('role_id', $gestionnaireRole->id)->paginate(10);
 
+        // Initialiser la requête pour les gestionnaires
+        $query = User::where('role_id', $gestionnaireRole->id);
+
+        // Appliquer des filtres selon la section
+        if ($section === 'actifs') {
+            $query->where('is_active', true);
+        } elseif ($section === 'desactives') {
+            $query->where('is_active', false);
+        }
+
+        // Paginer les résultats (10 par page)
+        $gestionnaires = $query->paginate(10);
+
+        // Formater les gestionnaires pour s'assurer que tous les champs nécessaires sont présents
+        $formattedGestionnaires = $gestionnaires->map(function ($gestionnaire) {
+            return [
+                'id' => $gestionnaire->id,
+                'name' => $gestionnaire->name ?? 'Non défini',
+                'username' => $gestionnaire->username ?? 'Non défini',
+                'email' => $gestionnaire->email ?? 'Non défini',
+                'is_active' => $gestionnaire->is_active,
+                'prenom' => $gestionnaire->prenom ?? 'Non défini',
+                'profile_image_url' => $gestionnaire->profile_image ? asset('storage/' . $gestionnaire->profile_image) : null,
+            ];
+        });
+
+        // Si la section est "dashboard", inclure les statistiques
+        if ($section === 'dashboard') {
+            $totalGestionnaires = User::where('role_id', $gestionnaireRole->id)->count();
+            $activeGestionnaires = User::where('role_id', $gestionnaireRole->id)->where('is_active', true)->count();
+            $inactiveGestionnaires = User::where('role_id', $gestionnaireRole->id)->where('is_active', false)->count();
+
+            return response()->json([
+                'totalGestionnaires' => $totalGestionnaires,
+                'activeGestionnaires' => $activeGestionnaires,
+                'inactiveGestionnaires' => $inactiveGestionnaires,
+                'gestionnaires' => $formattedGestionnaires,
+                'pagination' => [
+                    'current_page' => $gestionnaires->currentPage(),
+                    'last_page' => $gestionnaires->lastPage(),
+                    'next_page_url' => $gestionnaires->nextPageUrl(),
+                    'prev_page_url' => $gestionnaires->previousPageUrl(),
+                    'total' => $gestionnaires->total(),
+                    'per_page' => $gestionnaires->perPage(),
+                ],
+            ]);
+        }
+
+        // Pour les autres sections (gestionnaires, actifs, désactivés), retourner uniquement la liste paginée
         return response()->json([
-            'totalGestionnaires' => $totalGestionnaires,
-            'activeGestionnaires' => $activeGestionnaires,
-            'inactiveGestionnaires' => $inactiveGestionnaires,
-            'gestionnaires' => $gestionnaires->items(),
-            'pagination' => (string) $gestionnaires->links(),
+            'gestionnaires' => $formattedGestionnaires,
+            'pagination' => [
+                'current_page' => $gestionnaires->currentPage(),
+                'last_page' => $gestionnaires->lastPage(),
+                'next_page_url' => $gestionnaires->nextPageUrl(),
+                'prev_page_url' => $gestionnaires->previousPageUrl(),
+                'total' => $gestionnaires->total(),
+                'per_page' => $gestionnaires->perPage(),
+            ],
         ]);
-    }
-
-    public function gestionnairesData()
-    {
-        $gestionnaireRole = Role::where('name', 'gestionnaire')->firstOrFail();
-        $gestionnaires = User::where('role_id', $gestionnaireRole->id)->get();
-        return response()->json(['gestionnaires' => $gestionnaires]);
-    }
-
-    public function actifsData()
-    {
-        $gestionnaireRole = Role::where('name', 'gestionnaire')->firstOrFail();
-        $gestionnaires = User::where('role_id', $gestionnaireRole->id)->where('is_active', true)->get();
-        return response()->json(['gestionnaires' => $gestionnaires]);
-    }
-
-    public function desactivesData()
-    {
-        $gestionnaireRole = Role::where('name', 'gestionnaire')->firstOrFail();
-        $gestionnaires = User::where('role_id', $gestionnaireRole->id)->where('is_active', false)->get();
-        return response()->json(['gestionnaires' => $gestionnaires]);
-    }
-
-    public function ajouterData()
-    {
-        return response()->json(['form' => true]);
     }
 }

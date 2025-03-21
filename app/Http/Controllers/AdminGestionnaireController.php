@@ -8,7 +8,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
-use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Facades\Password;
 
 class AdminGestionnaireController extends Controller
@@ -41,12 +40,12 @@ class AdminGestionnaireController extends Controller
             'is_active' => false,
         ]);
 
-        // Envoyer un email de vérification
-        event(new Registered($user));
-
         // Générer un token pour définir le mot de passe
         $token = Password::createToken($user);
-        $resetLink = url('/reset-password', $token) . '?email=' . urlencode($user->email);
+        $resetLink = route('password.reset.profile', ['token' => $token, 'email' => $user->email]);
+
+        // Ajouter un log pour vérifier l'URL générée
+        \Illuminate\Support\Facades\Log::info('Lien de réinitialisation généré', ['resetLink' => $resetLink]);
 
         // Envoyer l'email pour définir le mot de passe
         Mail::send('emails.set_password', ['resetLink' => $resetLink], function ($message) use ($user) {
@@ -59,6 +58,48 @@ class AdminGestionnaireController extends Controller
 
     public function show(User $gestionnaire)
     {
+        $gestionnaire->profile_image_url = $gestionnaire->profile_image
+            ? asset('storage/' . $gestionnaire->profile_image)
+            : null;
+
         return response()->json($gestionnaire);
+    }
+
+    public function toggleStatus(Request $request, User $gestionnaire)
+    {
+        // Vérifier que l'utilisateur est un gestionnaire
+        $gestionnaireRole = Role::where('name', 'gestionnaire')->firstOrFail();
+        if ($gestionnaire->role_id !== $gestionnaireRole->id) {
+            return response()->json(['success' => false, 'message' => 'Utilisateur non autorisé.'], 403);
+        }
+
+        // Inverser le statut
+        $gestionnaire->is_active = !$gestionnaire->is_active;
+        $gestionnaire->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => $gestionnaire->is_active ? 'Gestionnaire activé avec succès.' : 'Gestionnaire désactivé avec succès.',
+            'is_active' => $gestionnaire->is_active,
+        ]);
+    }
+
+    public function destroy(User $gestionnaire)
+    {
+        // Vérifier que l'utilisateur est un gestionnaire
+        $gestionnaireRole = Role::where('name', 'gestionnaire')->firstOrFail();
+        if ($gestionnaire->role_id !== $gestionnaireRole->id) {
+            return response()->json(['success' => false, 'message' => 'Utilisateur non autorisé.'], 403);
+        }
+
+        // Supprimer l'image de profil si elle existe
+        if ($gestionnaire->profile_image) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($gestionnaire->profile_image);
+        }
+
+        // Supprimer le gestionnaire
+        $gestionnaire->delete();
+
+        return response()->json(['success' => true, 'message' => 'Gestionnaire supprimé avec succès.']);
     }
 }
