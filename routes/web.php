@@ -1,28 +1,25 @@
 <?php
 
 use App\Http\Controllers\ProfileController;
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AdminDashboardController;
 use App\Http\Controllers\AdminGestionnaireController;
 use App\Http\Controllers\GestionnaireDashboardController;
 use App\Http\Controllers\Auth\ResetPasswordAndProfileController;
+use App\Http\Controllers\HomeController;
+use App\Http\Controllers\CartController;
+use App\Http\Controllers\OrderController;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
 
-/*
-|--------------------------------------------------------------------------
-| Web Routes
-|--------------------------------------------------------------------------
-|
-| Here is where you can register web routes for your application. These
-| routes are loaded by the RouteServiceProvider and all of them will
-| be assigned to the "web" middleware group. Make something great!
-|
-*/
-
 // Page d'accueil
-Route::get('/', function () {
-    return view('welcome');
-});
+Route::get('/', [HomeController::class, 'index'])->name('home');
+
+// Routes pour le panier et la wishlist (accessibles à tous)
+Route::post('/cart/add/{id}', [CartController::class, 'add'])->name('cart.add');
+Route::post('/wishlist/toggle/{id}', [CartController::class, 'toggleWishlist'])->name('wishlist.toggle');
+
+// Route pour passer une commande (exige une authentification)
+Route::post('/order/place', [OrderController::class, 'place'])->name('order.place')->middleware('auth');
 
 // Routes publiques pour la réinitialisation du mot de passe et la mise à jour du profil
 Route::get('/password/reset/{token}', [ResetPasswordAndProfileController::class, 'showForm'])
@@ -49,8 +46,8 @@ Route::get('/dashboard', function () {
         return redirect()->route('gestionnaire.dashboard');
     }
 
-    // Par défaut
-    return view('dashboard');
+    // Rediriger les clients vers la page d'accueil (welcome.blade.php)
+    return redirect()->route('home');
 })->middleware(['auth', 'verified'])->name('dashboard');
 
 // Routes de gestion de profil (générées par Breeze)
@@ -82,5 +79,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::resource('orders', \App\Http\Controllers\OrderController::class);
         Route::resource('payments', \App\Http\Controllers\PaymentController::class);
         Route::get('/gestionnaire/dashboard', [GestionnaireDashboardController::class, 'index'])->name('gestionnaire.dashboard');
+        // Changement ici : Utiliser 'index' au lieu de 'indexGestionnaire'
+        Route::get('/gestionnaire/orders', [\App\Http\Controllers\OrderController::class, 'index'])->name('gestionnaire.orders.index');
+        Route::patch('/gestionnaire/orders/{order}', [\App\Http\Controllers\OrderController::class, 'updateStatus'])->name('gestionnaire.orders.update');
+    });
+
+    // Routes accessibles aux clients
+    Route::middleware('role:client')->group(function () {
+        Route::get('/burgers/{burger}', [\App\Http\Controllers\BurgerController::class, 'show'])->name('burgers.show');
+
+        // Routes pour le panier
+        Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
+        Route::post('/cart/update/{id}', [CartController::class, 'update'])->name('cart.update');
+        Route::get('/cart/remove/{id}', [CartController::class, 'remove'])->name('cart.remove');
+
+        Route::resource('orders', OrderController::class)->only(['index']);
+        Route::resource('payments', \App\Http\Controllers\PaymentController::class)->only(['index']);
     });
 });

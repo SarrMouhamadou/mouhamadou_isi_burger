@@ -12,9 +12,8 @@ class BurgerController extends Controller
      */
     public function index()
     {
-        $burgers = Burger::all();
-        return view('burgers.index', compact('burgers'));
-
+        $burgers = Burger::where('archived', false)->latest()->paginate(10);
+        return view('gestionnaire.burgers.index', compact('burgers'));
     }
 
     /**
@@ -22,7 +21,7 @@ class BurgerController extends Controller
      */
     public function create()
     {
-        return view('burgers.create');
+        return view('gestionnaire.burgers.create');
     }
 
     /**
@@ -33,24 +32,19 @@ class BurgerController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'price' => 'required|numeric|min:0',
-            'image' => 'nullable|image|max:2048',
-            'description' => 'nullable|string',
             'stock' => 'required|integer|min:0',
+            'category' => 'nullable|string|max:255',
+            'description' => 'nullable|string',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
-        $data = $validated;
-
-        // Je gére ici l'upload de l'image
-        if($request->hasFile('image')) {
-            $imagePath = $request->file('image')->store('burgers', 'public');
-            if($imagePath){
-                $data['image'] = $imagePath;
-            } else {
-                $data['image'] = null;
-            }
+        if ($request->hasFile('image')) {
+            $validated['image'] = $request->file('image')->store('burgers', 'public');
+        } else {
+            $validated['image'] = null;
         }
 
-        Burger::create($data);
+        Burger::create($validated);
 
         return redirect()->route('burgers.index')->with('success', 'Burger ajouté avec succès');
     }
@@ -58,9 +52,9 @@ class BurgerController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(string $id)
+    public function show(Burger $burger)
     {
-        //
+        return view('burgers.show', compact('burger'));
     }
 
     /**
@@ -68,9 +62,8 @@ class BurgerController extends Controller
      */
     public function edit(Burger $burger)
     {
-        return view('burgers.edit', compact('burger'));
+        return view('gestionnaire.burgers.edit', compact('burger'));
     }
-
 
     /**
      * Update the specified resource in storage.
@@ -80,31 +73,21 @@ class BurgerController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'price' => 'required|numeric|min:0',
-            'image' => 'nullable|string|max:255',
-            'description' => 'nullable|string',
             'stock' => 'required|integer|min:0',
+            'category' => 'nullable|string|max:255',
+            'description' => 'nullable|string',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
-        $data = $validated;
-
-        // Pareille aussi ici. Je gére l'upload de l'image.
-        if($request->hasFile('image')) {
-            // Je supprime l'ancienne image si elle existe
-            if($burger->image) {
-                storage::disk('public')->delete($burger->image);
-            }
-            $imagePath = $request->file('image')->store('burgers', 'public');
-            $data['image'] = $imagePath;
+        if ($request->hasFile('image')) {
+            $validated['image'] = $request->file('image')->store('burgers', 'public');
+        } else {
+            $validated['image'] = $burger->image; // Conserver l'image existante si aucune nouvelle image n'est téléchargée
         }
-        $burger->update($data);
 
-        return redirect()->route('burgers.index')->with('success', 'Burger mis à jour avec succès.');
-    }
+        $burger->update($validated);
 
-    public function archive(Burger $burger)
-    {
-        $burger->update(['archive' => true]);
-        return redirect()->route('burgers.index')->with('success', 'Burger archivé avec succés.');
+        return redirect()->route('burgers.index')->with('success', 'Burger mis à jour avec succès');
     }
 
     /**
@@ -113,6 +96,6 @@ class BurgerController extends Controller
     public function destroy(Burger $burger)
     {
         $burger->delete();
-        return redirect()->route('burgers.index')->with('success', 'Burger supprimé avec succés.');
+        return redirect()->route('burgers.index')->with('success', 'Burger supprimé avec succès');
     }
 }

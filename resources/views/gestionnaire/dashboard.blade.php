@@ -21,7 +21,7 @@
         .stat-card p { font-size: 1.5rem; font-weight: bold; margin: 0; }
         .stat-card small { color: #6c757d; }
         .chart-card { background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); }
-        .chart-card canvas { max-height: 200px !important; width: 100% !important; height: 200px !important; } /* Forcer la hauteur */
+        .chart-card canvas { max-height: 200px !important; width: 100% !important; height: 200px !important; }
         .order-table th, .order-table td { vertical-align: middle; }
         .order-table img { width: 40px; height: 40px; object-fit: cover; border-radius: 5px; }
         .status-badge { padding: 5px 10px; border-radius: 20px; font-size: 0.9rem; }
@@ -44,7 +44,7 @@
                     <a class="nav-link active" href="#" data-section="dashboard">Dashboard</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="{{ route('orders.index') }}">Commandes</a>
+                    <a class="nav-link" href="{{ route('gestionnaire.orders.index') }}">Commandes</a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="{{ route('payments.index') }}">Paiements</a>
@@ -98,22 +98,28 @@
 
                 <!-- Statistiques rapides -->
                 <div class="row mb-4">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <h5>Nombre de clients</h5>
+                            <p>{{ $clientCount ?? 0 }}</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
                         <div class="stat-card">
                             <h5>Commandes en cours (aujourd'hui)</h5>
-                            <p>{{ $ongoingOrdersCount }}</p>
+                            <p>{{ $ongoingOrdersCount ?? 0 }}</p>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <div class="stat-card">
                             <h5>Commandes validées (aujourd'hui)</h5>
-                            <p>{{ $validatedOrdersCount }}</p>
+                            <p>{{ $validatedOrdersCount ?? 0 }}</p>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <div class="stat-card">
                             <h5>Recettes journalières</h5>
-                            <p>{{ number_format($dailyRevenue, 2) }} FCFA</p>
+                            <p>{{ number_format($dailyRevenue ?? 0, 2) }} FCFA</p>
                         </div>
                     </div>
                 </div>
@@ -129,13 +135,35 @@
                     <div class="col-md-4">
                         <div class="chart-card">
                             <h5>Commandes par catégorie (ce mois)</h5>
-                            <canvas id="productsPerCategoryChart"></canvas>
+                            @if (array_sum($productsPerCategory) > 0)
+                                <canvas id="productsPerCategoryChart"></canvas>
+                            @else
+                                <p>Aucune donnée disponible pour ce mois.</p>
+                            @endif
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="chart-card">
                             <h5>Quantité par burger (ce mois)</h5>
-                            <canvas id="productsPerBurgerChart"></canvas>
+                            @if (!empty($productsPerBurger))
+                                <canvas id="productsPerBurgerChart"></canvas>
+                            @else
+                                <p>Aucune donnée disponible pour ce mois.</p>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Graphique des burgers populaires -->
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <div class="chart-card">
+                            <h5>Burgers les plus populaires</h5>
+                            @if (!empty($popularBurgers))
+                                <canvas id="popularBurgersChart"></canvas>
+                            @else
+                                <p>Aucune donnée disponible.</p>
+                            @endif
                         </div>
                     </div>
                 </div>
@@ -144,100 +172,116 @@
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h4>Commandes récentes</h4>
-                        <a href="{{ route('orders.index') }}" class="btn btn-primary btn-sm">Voir toutes les commandes</a>
+                        <a href="{{ route('gestionnaire.orders.index') }}" class="btn btn-primary btn-sm">Voir toutes les commandes</a>
                     </div>
                     <div class="card-body">
-                        <table class="table order-table">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Photo</th>
-                                    <th>Burger</th>
-                                    <th>Quantité</th>
-                                    <th>Montant</th>
-                                    <th>Client</th>
-                                    <th>Statut</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach ($recentOrders as $order)
+                        @if ($recentOrders->isEmpty())
+                            <p>Aucune commande récente.</p>
+                        @else
+                            <table class="table order-table">
+                                <thead>
                                     <tr>
-                                        <td>{{ $order->id }}</td>
-                                        <td>
-                                            @if ($order->burgers->first() && $order->burgers->first()->image)
-                                                <img src="{{ asset('storage/' . $order->burgers->first()->image) }}" alt="{{ $order->burgers->first()->name }}">
-                                            @else
-                                                <img src="{{ asset('images/default-burger.png') }}" alt="Burger par défaut">
-                                            @endif
-                                        </td>
-                                        <td>{{ $order->burgers->first() ? $order->burgers->first()->name : 'N/A' }}</td>
-                                        <td>{{ $order->burgers->sum('pivot.quantity') }}</td>
-                                        <td>{{ number_format($order->total_amount, 2) }} FCFA</td>
-                                        <td>{{ $order->user ? $order->user->name : $order->customer_name }}</td>
-                                        <td>
-                                            <span class="status-badge status-{{ strtolower(str_replace(' ', '-', $order->status)) }}">
-                                                {{ $order->status }}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <div class="dropdown">
-                                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                                    Actions
-                                                </button>
-                                                <ul class="dropdown-menu">
-                                                    <li>
-                                                        <a class="dropdown-item" href="{{ route('orders.show', $order->id) }}">Voir détails</a>
-                                                    </li>
-                                                    @if ($order->status != 'Payée' && $order->status != 'Annulée')
-                                                        <li>
-                                                            <form action="{{ route('orders.update', $order->id) }}" method="POST" style="display:inline;">
-                                                                @csrf
-                                                                @method('PATCH')
-                                                                <input type="hidden" name="status" value="En attente">
-                                                                <button type="submit" class="dropdown-item">En attente</button>
-                                                            </form>
-                                                        </li>
-                                                        <li>
-                                                            <form action="{{ route('orders.update', $order->id) }}" method="POST" style="display:inline;">
-                                                                @csrf
-                                                                @method('PATCH')
-                                                                <input type="hidden" name="status" value="En préparation">
-                                                                <button type="submit" class="dropdown-item">En préparation</button>
-                                                            </form>
-                                                        </li>
-                                                        <li>
-                                                            <form action="{{ route('orders.update', $order->id) }}" method="POST" style="display:inline;">
-                                                                @csrf
-                                                                @method('PATCH')
-                                                                <input type="hidden" name="status" value="Prête">
-                                                                <button type="submit" class="dropdown-item">Prête</button>
-                                                            </form>
-                                                        </li>
-                                                        <li>
-                                                            <form action="{{ route('orders.update', $order->id) }}" method="POST" style="display:inline;">
-                                                                @csrf
-                                                                @method('PATCH')
-                                                                <input type="hidden" name="status" value="Payée">
-                                                                <button type="submit" class="dropdown-item">Payée</button>
-                                                            </form>
-                                                        </li>
-                                                        <li>
-                                                            <form action="{{ route('orders.update', $order->id) }}" method="POST" style="display:inline;">
-                                                                @csrf
-                                                                @method('PATCH')
-                                                                <input type="hidden" name="status" value="Annulée">
-                                                                <button type="submit" class="dropdown-item text-danger" onclick="return confirm('Êtes-vous sûr de vouloir annuler cette commande ?')">Annuler</button>
-                                                            </form>
-                                                        </li>
-                                                    @endif
-                                                </ul>
-                                            </div>
-                                        </td>
+                                        <th>ID</th>
+                                        <th>Photo</th>
+                                        <th>Burger</th>
+                                        <th>Quantité</th>
+                                        <th>Montant</th>
+                                        <th>Client</th>
+                                        <th>Statut</th>
+                                        <th>Actions</th>
                                     </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    @foreach ($recentOrders as $order)
+                                        <tr data-order-id="{{ $order->id }}">
+                                            <td>{{ $order->id }}</td>
+                                            <td>
+                                                @if ($order->burgers->first() && $order->burgers->first()->image)
+                                                    <img src="{{ asset('storage/' . $order->burgers->first()->image) }}" alt="{{ $order->burgers->first()->name }}">
+                                                @else
+                                                    <img src="{{ asset('images/default-burger.png') }}" alt="Burger par défaut">
+                                                @endif
+                                            </td>
+                                            <td>{{ $order->burgers->first() ? $order->burgers->first()->name : 'N/A' }}</td>
+                                            <td>{{ $order->burgers->sum('pivot.quantity') }}</td>
+                                            <td>{{ number_format($order->total_amount ?? 0, 2) }} FCFA</td>
+                                            <td>{{ $order->user ? $order->user->name : 'N/A' }}</td>
+                                            <td>
+                                                <span class="status-badge status-{{ strtolower(str_replace(' ', '-', $order->status)) }}">
+                                                    {{ $order->status }}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div class="dropdown">
+                                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                                        Actions
+                                                    </button>
+                                                    <ul class="dropdown-menu">
+                                                        <li>
+                                                            <a class="dropdown-item" href="{{ route('orders.show', $order->id) }}">Voir détails</a>
+                                                        </li>
+                                                        @if ($order->status != 'Payée' && $order->status != 'Annulée')
+                                                            <li>
+                                                                <button class="dropdown-item update-status" data-status="En attente">En attente</button>
+                                                            </li>
+                                                            <li>
+                                                                <button class="dropdown-item update-status" data-status="En préparation">En préparation</button>
+                                                            </li>
+                                                            <li>
+                                                                <button class="dropdown-item update-status" data-status="Prête">Prête</button>
+                                                            </li>
+                                                            <li>
+                                                                <button class="dropdown-item update-status" data-status="Payée">Payée</button>
+                                                            </li>
+                                                            <li>
+                                                                <button class="dropdown-item text-danger update-status" data-status="Annulée" onclick="return confirm('Êtes-vous sûr de vouloir annuler cette commande ?')">Annuler</button>
+                                                            </li>
+                                                        @endif
+                                                    </ul>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        @endif
+                    </div>
+                </div>
+
+                <!-- Burgers les plus populaires -->
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h4>Burgers les plus populaires</h4>
+                    </div>
+                    <div class="card-body">
+                        @if ($popularBurgers->isEmpty())
+                            <p>Aucun burger populaire pour le moment.</p>
+                        @else
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Photo</th>
+                                        <th>Nom</th>
+                                        <th>Quantité totale commandée</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach ($popularBurgers as $burger)
+                                        <tr>
+                                            <td>
+                                                @if ($burger->image)
+                                                    <img src="{{ asset('storage/' . $burger->image) }}" alt="{{ $burger->name }}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 5px;">
+                                                @else
+                                                    <img src="{{ asset('images/default-burger.png') }}" alt="Burger par défaut" style="width: 40px; height: 40px; object-fit: cover; border-radius: 5px;">
+                                                @endif
+                                            </td>
+                                            <td>{{ $burger->name }}</td>
+                                            <td>{{ $burger->total_quantity }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        @endif
                     </div>
                 </div>
             </div>
@@ -256,7 +300,7 @@
                 labels: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'],
                 datasets: [{
                     label: 'Commandes',
-                    data: @json(array_values($ordersPerMonthData)),
+                    data: @json(array_values($ordersPerMonthData ?? array_fill(1, 12, 0))),
                     borderColor: '#f97316',
                     backgroundColor: 'rgba(249, 115, 22, 0.2)',
                     fill: true,
@@ -266,7 +310,7 @@
             },
             options: {
                 responsive: true,
-                maintainAspectRatio: false, // Ajout pour permettre un contrôle précis de la hauteur
+                maintainAspectRatio: false,
                 scales: {
                     y: {
                         beginAtZero: true,
@@ -277,53 +321,160 @@
         });
 
         // Graphique : Commandes par catégorie
-        const productsPerCategoryCtx = document.getElementById('productsPerCategoryChart').getContext('2d');
-        new Chart(productsPerCategoryCtx, {
-            type: 'doughnut',
-            data: {
-                labels: @json(array_keys($productsPerCategory)),
-                datasets: [{
-                    data: @json(array_values($productsPerCategory)),
-                    backgroundColor: ['#f97316', '#ffcc00'],
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false, // Désactiver pour forcer la hauteur
-                plugins: {
-                    legend: {
-                        position: 'bottom',
+        const productsPerCategoryCtx = document.getElementById('productsPerCategoryChart')?.getContext('2d');
+        if (productsPerCategoryCtx) {
+            new Chart(productsPerCategoryCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: @json(array_keys($productsPerCategory ?? ['Burgers' => 0, 'Autres' => 0])),
+                    datasets: [{
+                        data: @json(array_values($productsPerCategory ?? ['Burgers' => 0, 'Autres' => 0])),
+                        backgroundColor: ['#f97316', '#ffcc00'],
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                        }
                     }
                 }
-            }
-        });
+            });
+        }
 
         // Graphique : Quantité par burger
-        const productsPerBurgerCtx = document.getElementById('productsPerBurgerChart').getContext('2d');
-        new Chart(productsPerBurgerCtx, {
-            type: 'bar',
-            data: {
-                labels: @json(array_keys($productsPerBurger)),
-                datasets: [{
-                    label: 'Quantité',
-                    data: @json(array_values($productsPerBurger)),
-                    backgroundColor: '#f97316',
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false, // Ajout pour permettre un contrôle précis de la hauteur
-                scales: {
-                    y: {
-                        beginAtZero: true
-                    }
+        const productsPerBurgerCtx = document.getElementById('productsPerBurgerChart')?.getContext('2d');
+        if (productsPerBurgerCtx) {
+            new Chart(productsPerBurgerCtx, {
+                type: 'bar',
+                data: {
+                    labels: @json(array_keys($productsPerBurger ?? [])),
+                    datasets: [{
+                        label: 'Quantité',
+                        data: @json(array_values($productsPerBurger ?? [])),
+                        backgroundColor: '#f97316',
+                    }]
                 },
-                plugins: {
-                    legend: {
-                        position: 'bottom',
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                        }
                     }
                 }
-            }
+            });
+        }
+
+        // Graphique : Burgers les plus populaires
+        const popularBurgersCtx = document.getElementById('popularBurgersChart')?.getContext('2d');
+        if (popularBurgersCtx) {
+            new Chart(popularBurgersCtx, {
+                type: 'bar',
+                data: {
+                    labels: @json($popularBurgers->pluck('name')),
+                    datasets: [{
+                        label: 'Quantité commandée',
+                        data: @json($popularBurgers->pluck('total_quantity')),
+                        backgroundColor: '#f97316',
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                        }
+                    }
+                }
+            });
+        }
+
+        // Gestion des mises à jour de statut via AJAX
+        document.querySelectorAll('.update-status').forEach(button => {
+            button.addEventListener('click', function () {
+                const orderId = this.closest('tr').dataset.orderId;
+                const status = this.dataset.status;
+                const statusBadge = this.closest('tr').querySelector('.status-badge');
+
+                fetch(`/gestionnaire/orders/${orderId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    },
+                    body: JSON.stringify({ status: status }),
+                })
+                .then(response => {
+                    // Vérifier le statut de la réponse
+                    if (!response.ok) {
+                        if (response.status === 403) {
+                            throw new Error('Accès non autorisé. Vérifiez que vous avez le rôle de gestionnaire.');
+                        }
+                        if (response.status === 422) {
+                            return response.json().then(data => {
+                                throw new Error(data.errors.status ? data.errors.status[0] : 'Erreur de validation');
+                            });
+                        }
+                        throw new Error(`Erreur HTTP : ${response.status} - ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        // Mettre à jour le badge de statut
+                        statusBadge.textContent = status;
+                        statusBadge.className = `status-badge status-${status.toLowerCase().replace(' ', '-')}`;
+
+                        // Afficher une notification
+                        Toastify({
+                            text: 'Statut mis à jour avec succès !',
+                            duration: 3000,
+                            gravity: 'top',
+                            position: 'right',
+                            backgroundColor: '#28a745',
+                        }).showToast();
+
+                        // Désactiver les actions si le statut est "Payée" ou "Annulée"
+                        if (status === 'Payée' || status === 'Annulée') {
+                            const actionsDropdown = this.closest('td').querySelector('.dropdown');
+                            actionsDropdown.innerHTML = '<button class="btn btn-sm btn-outline-secondary" disabled>Actions</button>';
+                        }
+                    } else {
+                        Toastify({
+                            text: `Erreur lors de la mise à jour du statut : ${data.error || 'Erreur inconnue'}`,
+                            duration: 3000,
+                            gravity: 'top',
+                            position: 'right',
+                            backgroundColor: '#dc3545',
+                        }).showToast();
+                    }
+                })
+                .catch(error => {
+                    console.error('Erreur:', error);
+                    Toastify({
+                        text: `Une erreur s\'est produite : ${error.message}`,
+                        duration: 3000,
+                        gravity: 'top',
+                        position: 'right',
+                        backgroundColor: '#dc3545',
+                    }).showToast();
+                });
+            });
         });
     </script>
 </body>

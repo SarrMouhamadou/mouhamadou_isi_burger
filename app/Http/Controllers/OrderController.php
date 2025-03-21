@@ -8,110 +8,180 @@ use App\Models\Payment;
 use App\Notifications\OrderReadyNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Facades\DB;
 use PDF;
 
 class OrderController extends Controller
 {
+    public function __construct()
+    {
+        // Applique le middleware 'auth' à toutes les méthodes
+        $this->middleware('auth');
+        // Applique le middleware 'role:gestionnaire' à toutes les méthodes sauf 'place', 'index', et 'show'
+        $this->middleware('role:gestionnaire')->except(['place', 'index', 'show']);
+    }
+
+    /**
+     * Display a listing of the orders.
+     */
     public function index()
     {
-        $orders = Order::with('burgers', 'user')->latest()->paginate(10);
-        return view('gestionnaire.orders.index', compact('orders'));
-    }
+        $user = Auth::user();
 
-    public function create()
-    {
-        $burgers = Burger::where('stock', '>', 0)->get();
-        return view('orders.create', compact('burgers'));
-    }
-
-    public function store(Request $request)
-    {
-        $validated = $request->validate([
-            'customer_name' => 'required|string|max:255',
-            'customer_email' => 'required|email|max:255',
-            'burgers' => 'required|array',
-            'burgers.*.burger_id' => 'required|exists:burgers,id',
-            'burgers.*.quantity' => 'required|integer|min:1',
-        ]);
-
-        $total = 0;
-        $order = Order::create([
-            'user_id' => Auth::id() ?? null,
-            'customer_name' => $validated['customer_name'],
-            'customer_email' => $validated['customer_email'],
-            'status' => 'En attente',
-            'total_amount' => 0,
-        ]);
-
-        foreach ($validated['burgers'] as $item) {
-            $burger = Burger::find($item['burger_id']);
-            if ($burger && $burger->stock >= $item['quantity']) {
-                $order->burgers()->attach($burger->id, [
-                    'quantity' => $item['quantity'],
-                    'unit_price' => $burger->price,
-                ]);
-                $total += $burger->price * $item['quantity'];
-                $burger->stock -= $item['quantity'];
-                $burger->save();
-            }
+        if ($user->role->name === 'gestionnaire') {
+            // Les gestionnaires voient toutes les commandes
+            $orders = Order::with('burgers', 'user')->latest()->paginate(10);
+            return view('gestionnaire.orders.index', compact('orders'));
+        } else {
+            // Les clients voient uniquement leurs propres commandes
+            $orders = $user->orders()->with('burgers')->latest()->paginate(10);
+            return view('orders.index', compact('orders'));
         }
-
-        $order->update(['total_amount' => $total]);
-        return redirect()->route('orders.index')->with('success', 'Commande créée avec succès.');
     }
 
+    /**
+     * Display the specified order.
+     */
     public function show(Order $order)
     {
-        $order->load('burgers', 'user');
-        return view('gestionnaire.orders.show', compact('order'));
-    }
+        $user = Auth::user();
 
-    public function edit(Order $order)
-    {
-        return view('orders.edit', compact('order'));
-    }
-
-    public function update(Request $request, Order $order)
-    {
-        $validated = $request->validate([
-            'status' => ['required', 'in:En attente,En préparation,Prête,Payée,Annulée'],
-        ]);
-
-        $oldStatus = $order->status;
-        $order->status = $validated['status'];
-        $order->save();
-
-        // Si le statut passe à "Prête", envoyer un email avec la facture en PDF
-        if ($validated['status'] === 'Prête' && $oldStatus !== 'Prête') {
-            // Générer la facture PDF
-            $pdf = PDF::loadView('gestionnaire.orders.invoice', compact('order'));
-            $pdfPath = storage_path('app/public/invoices/invoice-' . $order->id . '.pdf');
-            $pdf->save($pdfPath);
-
-            // Envoyer la notification
-            if ($order->user) {
-                $order->user->notify(new OrderReadyNotification($order, $pdfPath));
-            }
+        // Vérifier que l'utilisateur a le droit de voir cette commande
+        if ($user->role->name !== 'gestionnaire' && $order->user_id !== $user->id) {
+            abort(403, 'Accès non autorisé.');
         }
 
-        // Si le statut passe à "Payée", enregistrer le paiement
-        if ($validated['status'] === 'Payée' && $oldStatus !== 'Payée') {
-            Payment::create([
-                'order_id' => $order->id,
-                'amount' => $order->total_amount,
+        $order->load('burgers', 'user', 'payment');
+
+        if ($user->role->name === 'gestionnaire') {
+            return view('gestionnaire.orders.show', compact('order'));
+        } else {
+            return view('orders.show', compact('order'));
+        }
+    }
+
+    /**
+     * Update the specified order in storage.
+     */
+    public function update(Request $request, Order $order)
+    {
+        $request->validate([
+            'status' => 'required|in:En attente,En préparation,Prête,Payée,Annulée',
+        ]);
+
+        $order->update([
+            'status' => $request->status,
+        ]);
+
+        // Si la commande est marquée comme "Payée", mettre à jour payment_date
+        if ($request->status === 'Payée' && $order->payment) {
+            $order->payment->update([
+                'status' => 'Payée',
                 'payment_date' => now(),
-                'payment_method' => 'Espèces',
             ]);
         }
 
-        return redirect()->back()->with('success', 'Statut de la commande mis à jour avec succès.');
+        // Si la commande est marquée comme "Prête", notifier le client
+        if ($request->status === 'Prête' && $order->user) {
+            $order->user->notify(new OrderReadyNotification($order));
+        }
+
+        return redirect()->route('orders.index')->with('success', 'Statut de la commande mis à jour avec succès.');
     }
 
-    public function destroy(Order $order)
+    /**
+     * Place a new order (for authenticated clients).
+     */
+    public function place(Request $request)
     {
-        // Au lieu de supprimer, on annule la commande
-        $order->status = 'Annulée';
-        $order->save();
-        return redirect()->route('orders.index')->with('success', 'Commande annulée avec succès.');
+        $cart = Session::get('cart', []);
+
+        if (empty($cart)) {
+            return redirect()->route('home')->with('error', 'Votre panier est vide.');
+        }
+
+        $totalAmount = 0;
+        foreach ($cart as $item) {
+            $totalAmount += $item['price'] * $item['quantity'];
+        }
+
+        $user = Auth::user();
+
+        try {
+            $order = DB::transaction(function () use ($user, $cart, $totalAmount) {
+                $order = Order::create([
+                    'user_id' => $user->id,
+                    'total_amount' => $totalAmount,
+                    'status' => 'En attente',
+                ]);
+
+                foreach ($cart as $id => $item) {
+                    $order->burgers()->attach($id, [
+                        'quantity' => $item['quantity'],
+                        'unit_price' => $item['price'],
+                    ]);
+                }
+
+                Payment::create([
+                    'order_id' => $order->id,
+                    'amount' => $totalAmount,
+                    'status' => 'En attente',
+                    'payment_date' => null,
+                ]);
+
+                return $order;
+            });
+
+            Session::forget('cart');
+
+            return redirect()->route('orders.index')->with('success', 'Commande passée avec succès !');
+        } catch (\Exception $e) {
+            return redirect()->route('cart.index')->with('error', 'Une erreur s\'est produite lors de la création de la commande : ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Update the status of the specified order via AJAX.
+     */
+    public function updateStatus(Request $request, Order $order)
+    {
+        try {
+            $request->validate([
+                'status' => 'required|in:En attente,En préparation,Prête,Payée,Annulée',
+            ]);
+
+            $order->update([
+                'status' => $request->status,
+            ]);
+
+            // Si la commande est marquée comme "Payée", mettre à jour payment_date
+            if ($request->status === 'Payée' && $order->payment) {
+                $order->payment->update([
+                    'status' => 'Payée',
+                    'payment_date' => now(),
+                ]);
+            }
+
+            // Si la commande est marquée comme "Prête", notifier le client
+            if ($request->status === 'Prête' && $order->user) {
+                $order->user->notify(new OrderReadyNotification($order));
+            }
+
+            return response()->json(['success' => true]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            \Log::error('Erreur lors de la mise à jour du statut de la commande : ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Une erreur s\'est produite lors de la mise à jour du statut.',
+                'message' => $e->getMessage(),
+            ], 500);
+        }
     }
 }

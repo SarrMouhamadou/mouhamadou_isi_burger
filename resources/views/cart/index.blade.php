@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>ISI Burger - Détails des paiements</title>
+    <title>ISI Burger - Panier</title>
     <!-- Bootstrap CSS -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
     <!-- Bootstrap Icons -->
@@ -128,7 +128,7 @@
 
             <!-- Main Content -->
             <div class="col-md-10 p-4">
-                <h2>Détails des paiements</h2>
+                <h2>Panier</h2>
 
                 @if (session('success'))
                     <div class="alert alert-success">
@@ -136,31 +136,63 @@
                     </div>
                 @endif
 
-                @if ($payments->isEmpty())
-                    <p>Vous n'avez aucun paiement pour le moment.</p>
-                @else
+                @if (session('error'))
+                    <div class="alert alert-danger">
+                        {{ session('error') }}
+                    </div>
+                @endif
+
+                @if (count($cart) > 0)
                     <table class="table">
                         <thead>
                             <tr>
-                                <th>ID</th>
-                                <th>Commande ID</th>
-                                <th>Montant</th>
-                                <th>Statut</th>
-                                <th>Date de paiement</th>
+                                <th>Photo</th>
+                                <th>Burger</th>
+                                <th>Prix unitaire</th>
+                                <th>Quantité</th>
+                                <th>Total</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach ($payments as $payment)
+                            @foreach ($cart as $id => $item)
                                 <tr>
-                                    <td>{{ $payment->id }}</td>
-                                    <td>{{ $payment->order_id }}</td>
-                                    <td>{{ number_format($payment->amount, 2) }} FCFA</td>
-                                    <td>{{ $payment->status }}</td>
-                                    <td>{{ $payment->payment_date->format('d/m/Y H:i') }}</td>
+                                    <td>
+                                        @if ($item['image'])
+                                            <img src="{{ asset('storage/' . $item['image']) }}" alt="{{ $item['name'] }}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 5px;">
+                                        @else
+                                            <img src="{{ asset('images/default-burger.png') }}" alt="Burger par défaut" style="width: 40px; height: 40px; object-fit: cover; border-radius: 5px;">
+                                        @endif
+                                    </td>
+                                    <td>{{ $item['name'] }}</td>
+                                    <td>{{ number_format($item['price'], 2) }} FCFA</td>
+                                    <td>
+                                        <form action="{{ route('cart.update', $id) }}" method="POST" class="d-inline">
+                                            @csrf
+                                            <input type="number" name="quantity" value="{{ $item['quantity'] }}" min="0" style="width: 60px;" class="form-control d-inline">
+                                            <button type="submit" class="btn btn-sm btn-primary">Mettre à jour</button>
+                                        </form>
+                                    </td>
+                                    <td>{{ number_format($item['price'] * $item['quantity'], 2) }} FCFA</td>
+                                    <td>
+                                        <a href="{{ route('cart.remove', $id) }}" class="btn btn-sm btn-danger" onclick="return confirm('Êtes-vous sûr de vouloir supprimer cet article ?')">Supprimer</a>
+                                    </td>
                                 </tr>
                             @endforeach
                         </tbody>
                     </table>
+
+                    <div class="text-end">
+                        <p><strong>Sous-total :</strong> {{ number_format($subtotal, 2) }} FCFA</p>
+                        <p><strong>Taxe (5%) :</strong> {{ number_format($tax, 2) }} FCFA</p>
+                        <p><strong>Total :</strong> {{ number_format($total, 2) }} FCFA</p>
+                        <form action="{{ route('order.place') }}" method="POST">
+                            @csrf
+                            <button type="submit" class="btn btn-primary">Passer la commande</button>
+                        </form>
+                    </div>
+                @else
+                    <p>Votre panier est vide.</p>
                 @endif
 
                 <a href="{{ route('home') }}" class="btn btn-secondary mt-3">Retour au catalogue</a>

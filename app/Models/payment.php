@@ -9,7 +9,7 @@ class Payment extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['order_id', 'amount', 'payment_date'];
+    protected $fillable = ['order_id', 'amount', 'status', 'payment_date'];
 
     protected $casts = [
         'payment_date' => 'datetime',

@@ -8,16 +8,34 @@ use App\Models\Burger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
-
 class PaymentController extends Controller
 {
+    public function __construct()
+    {
+        // Applique le middleware 'auth' à toutes les méthodes
+        $this->middleware('auth');
+        // Applique le middleware 'role:gestionnaire' à toutes les méthodes sauf 'index'
+        $this->middleware('role:gestionnaire')->except('index');
+    }
+
     /**
      * Display a listing of the resource.
      */
     public function index()
     {
-        $payments = Payment::with('order')->get();
-        return view('payments.index', compact('payments'));
+        $user = Auth::user();
+
+        if ($user->role->name === 'gestionnaire') {
+            // Les gestionnaires voient tous les paiements
+            $payments = Payment::with('order')->get();
+            return view('gestionnaire.payments.index', compact('payments'));
+        } else {
+            // Les clients voient uniquement les paiements liés à leurs commandes
+            $payments = Payment::whereHas('order', function ($query) use ($user) {
+                $query->where('user_id', $user->id);
+            })->with('order')->get();
+            return view('payments.index', compact('payments'));
+        }
     }
 
     /**
@@ -26,7 +44,7 @@ class PaymentController extends Controller
     public function create()
     {
         $orders = Order::whereDoesntHave('payment')->get();
-        return view('payments.create', compact('orders'));
+        return view('gestionnaire.payments.create', compact('orders'));
     }
 
     /**
@@ -44,7 +62,7 @@ class PaymentController extends Controller
 
         Payment::create($validated);
 
-        return redirect()->route('payments.index')->with('success', 'Paiement enregistré avec succés');
+        return redirect()->route('payments.index')->with('success', 'Paiement enregistré avec succès');
     }
 
     /**
