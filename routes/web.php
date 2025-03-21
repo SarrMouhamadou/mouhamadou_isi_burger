@@ -8,6 +8,7 @@ use App\Http\Controllers\Auth\ResetPasswordAndProfileController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\OrderController;
+use App\Http\Controllers\PaymentController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
 
@@ -77,10 +78,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('role:gestionnaire')->group(function () {
         Route::resource('burgers', \App\Http\Controllers\BurgerController::class);
         Route::resource('orders', \App\Http\Controllers\OrderController::class);
-        Route::resource('payments', \App\Http\Controllers\PaymentController::class);
+        // Exclure 'index' de la ressource payments pour éviter le middleware role:gestionnaire
+        Route::resource('payments', \App\Http\Controllers\PaymentController::class)->except(['index']);
         Route::get('/gestionnaire/dashboard', [GestionnaireDashboardController::class, 'index'])->name('gestionnaire.dashboard');
-        // Changement ici : Utiliser 'index' au lieu de 'indexGestionnaire'
         Route::get('/gestionnaire/orders', [\App\Http\Controllers\OrderController::class, 'index'])->name('gestionnaire.orders.index');
+        Route::get('/orders/{order}', [OrderController::class, 'show'])->name('gestionnaire.orders.show');
         Route::patch('/gestionnaire/orders/{order}', [\App\Http\Controllers\OrderController::class, 'updateStatus'])->name('gestionnaire.orders.update');
     });
 
@@ -94,6 +96,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/cart/remove/{id}', [CartController::class, 'remove'])->name('cart.remove');
 
         Route::resource('orders', OrderController::class)->only(['index']);
+        // Exclure 'index' ici aussi si nécessaire
         Route::resource('payments', \App\Http\Controllers\PaymentController::class)->only(['index']);
     });
+
+    // Route pour payments.index, accessible à tous les utilisateurs authentifiés
+    Route::get('/payments', [PaymentController::class, 'index'])->name('payments.index');
 });

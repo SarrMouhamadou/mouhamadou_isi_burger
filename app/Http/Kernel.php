@@ -66,7 +66,7 @@ class Kernel extends HttpKernel
         'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'role' => \App\Http\Middleware\CheckRole::class,
-        'force.logout' => \App\Http\Middleware\ForceLogout::class,  // Ajoutez ici
+        'force.logout' => \App\Http\Middleware\ForceLogout::class,
     ];
 
     protected $routeMiddleware = [

@@ -52,6 +52,10 @@
                 <li class="nav-item">
                     <a class="nav-link" href="#" data-section="statistiques">Statistiques</a>
                 </li>
+                <!-- Ajout de la section Burger -->
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ route('burgers.index') }}">Burgers</a>
+                </li>
                 <li class="nav-item">
                     <a class="nav-link" href="{{ route('logout') }}"
                        onclick="event.preventDefault(); document.getElementById('logout-form').submit();">

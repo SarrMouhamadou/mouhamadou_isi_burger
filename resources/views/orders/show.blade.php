@@ -15,34 +15,35 @@
         .sidebar a:hover { background-color: #e65c00; }
         .card { border-radius: 10px; border: none; }
         .nav-link.active { background-color: #e65c00; }
-        .order-table th, .order-table td { vertical-align: middle; }
-        .order-table img { width: 40px; height: 40px; object-fit: cover; border-radius: 5px; }
-        .status-badge { padding: 5px 10px; border-radius: 20px; font-size: 0.9rem; }
-        .status-en-attente { background-color: #ffcc00; color: white; }
-        .status-en-préparation { background-color: #007bff; color: white; }
-        .status-prête { background-color: #28a745; color: white; }
-        .status-payée { background-color: #17a2b8; color: white; }
-        .status-annulée { background-color: #dc3545; color: white; }
+        .invoice-header { background-color: #f97316; color: white; padding: 20px; border-radius: 10px 10px 0 0; }
+        .invoice-body { background-color: #fff5e6; padding: 20px; border-radius: 0 0 10px 10px; }
+        .table thead { background-color: #f97316; color: white; }
+        /* Réduire la taille de la facture de 1/3 (longueur et largeur) */
+        .invoice-container {
+            transform: scale(0.6667); /* Réduction de 1/3 (1 - 0.3333 = 0.6667) */
+            transform-origin: top left; /* Point de référence pour la réduction */
+            width: 150%; /* Ajuster la largeur pour compenser la réduction */
+        }
     </style>
 </head>
 <body class="h-full">
     <div class="d-flex">
-        <!-- Sidebar pour Gestionnaire -->
+        <!-- Sidebar pour Client -->
         <div class="sidebar p-3" style="width: 250px;">
-            <h4 class="text-center">ISI Burger - Gestionnaire</h4>
+            <h4 class="text-center">ISI Burger - Client</h4>
             <hr>
             <ul class="nav flex-column">
                 <li class="nav-item">
-                    <a class="nav-link" href="{{ route('gestionnaire.dashboard') }}">Dashboard</a>
+                    <a class="nav-link" href="{{ route('home') }}">Accueil</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link active" href="{{ route('orders.index') }}">Commandes</a>
+                    <a class="nav-link" href="{{ route('cart.index') }}">Panier</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="{{ route('payments.index') }}">Paiements</a>
+                    <a class="nav-link active" href="{{ route('orders.index') }}">Mes Commandes</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="#" data-section="statistiques">Statistiques</a>
+                    <a class="nav-link" href="{{ route('payments.index') }}">Mes Paiements</a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="{{ route('logout') }}"
@@ -58,7 +59,6 @@
 
         <!-- Contenu Principal -->
         <div class="flex-grow-1 p-4">
-            <!-- En-tête -->
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2>Détails de la Commande #{{ $order->id }}</h2>
                 <div class="dropdown">
@@ -80,119 +80,76 @@
                 </div>
             </div>
 
-            <!-- Détails de la commande -->
-            <div class="card">
-                <div class="card-header">
-                    <h4>Commande #{{ $order->id }}</h4>
+            <!-- Facture -->
+            <div class="card invoice-container">
+                <div class="invoice-header">
+                    <h4 class="mb-0">Facture - Commande #{{ $order->id }}</h4>
                 </div>
-                <div class="card-body">
-                    @if (session('success'))
-                        <div class="alert alert-success">
-                            {{ session('success') }}
+                <div class="invoice-body">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h5>Facturé à :</h5>
+                            <p>
+                                <strong>{{ $order->user->name }}</strong><br>
+                                Adresse : HLM Grand Médine<br>
+                                Tél : 709641912<br>
+                                Email : {{ $order->user->email }}
+                            </p>
                         </div>
-                    @endif
+                        <div class="col-md-6 text-md-end">
+                            <h5>Détails de la commande</h5>
+                            <p>
+                                N° commande : {{ $order->id }}<br>
+                                Date : {{ $order->created_at->format('d/m/Y') }}<br>
+                                Paiement : Espèces<br>
+                                Statut : {{ $order->status }}
+                            </p>
+                        </div>
+                    </div>
 
-                    <p><strong>Client :</strong> {{ $order->user ? $order->user->name : $order->customer_name }}</p>
-                    <p><strong>Email :</strong> {{ $order->customer_email }}</p>
-                    <p><strong>Date :</strong> {{ $order->created_at->format('d/m/Y H:i') }}</p>
-                    <p><strong>Statut :</strong>
-                        <span class="status-badge status-{{ strtolower(str_replace(' ', '-', $order->status)) }}">
-                            {{ $order->status }}
-                        </span>
-                    </p>
-
-                    <h5 class="mt-4">Burgers commandés</h5>
-                    <table class="table order-table">
+                    <h5>Détails des articles</h5>
+                    <table class="table">
                         <thead>
                             <tr>
-                                <th>Photo</th>
-                                <th>Nom</th>
-                                <th>Quantité</th>
-                                <th>Prix unitaire</th>
+                                <th>Description</th>
+                                <th>Qté</th>
+                                <th>Prix Unitaire</th>
                                 <th>Total</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach ($order->burgers as $burger)
+                            @foreach($order->burgers as $burger)
                                 <tr>
-                                    <td>
-                                        @if ($burger->image)
-                                            <img src="{{ asset('storage/' . $burger->image) }}" alt="{{ $burger->name }}">
-                                        @else
-                                            <img src="{{ asset('images/default-burger.png') }}" alt="Burger par défaut">
-                                        @endif
-                                    </td>
                                     <td>{{ $burger->name }}</td>
                                     <td>{{ $burger->pivot->quantity }}</td>
-                                    <td>{{ number_format($burger->pivot->unit_price, 2) }} FCFA</td>
-                                    <td>{{ number_format($burger->pivot->quantity * $burger->pivot->unit_price, 2) }} FCFA</td>
+                                    <td>{{ number_format($burger->price, 2) }} FCFA</td>
+                                    <td>{{ number_format($burger->pivot->quantity * $burger->price, 2) }} FCFA</td>
                                 </tr>
                             @endforeach
-                        </tbody>
-                        <tfoot>
                             <tr>
-                                <td colspan="4"><strong>Total</strong></td>
-                                <td>{{ number_format($order->total_amount, 2) }} FCFA</td>
+                                <td colspan="3" class="text-end"><strong>Sous-total</strong></td>
+                                <td><strong>{{ number_format($order->burgers->sum(fn($burger) => $burger->pivot->quantity * $burger->price), 2) }} FCFA</strong></td>
                             </tr>
-                        </tfoot>
+                            <tr>
+                                <td colspan="3" class="text-end"><strong>Frais de livraison</strong></td>
+                                <td><strong>2,000.00 FCFA</strong></td>
+                            </tr>
+                            <tr>
+                                <td colspan="3" class="text-end"><strong>Total</strong></td>
+                                <td><strong>{{ number_format($order->total_amount, 2) }} FCFA</strong></td>
+                            </tr>
+                        </tbody>
                     </table>
 
-                    <!-- Actions -->
-                    @if ($order->status != 'Payée' && $order->status != 'Annulée')
-                        <div class="mt-4">
-                            <h5>Modifier le statut</h5>
-                            <div class="dropdown">
-                                <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                    Changer le statut
-                                </button>
-                                <ul class="dropdown-menu">
-                                    <li>
-                                        <form action="{{ route('orders.update', $order->id) }}" method="POST" style="display:inline;">
-                                            @csrf
-                                            @method('PATCH')
-                                            <input type="hidden" name="status" value="En attente">
-                                            <button type="submit" class="dropdown-item">En attente</button>
-                                        </form>
-                                    </li>
-                                    <li>
-                                        <form action="{{ route('orders.update', $order->id) }}" method="POST" style="display:inline;">
-                                            @csrf
-                                            @method('PATCH')
-                                            <input type="hidden" name="status" value="En préparation">
-                                            <button type="submit" class="dropdown-item">En préparation</button>
-                                        </form>
-                                    </li>
-                                    <li>
-                                        <form action="{{ route('orders.update', $order->id) }}" method="POST" style="display:inline;">
-                                            @csrf
-                                            @method('PATCH')
-                                            <input type="hidden" name="status" value="Prête">
-                                            <button type="submit" class="dropdown-item">Prête</button>
-                                        </form>
-                                    </li>
-                                    <li>
-                                        <form action="{{ route('orders.update', $order->id) }}" method="POST" style="display:inline;">
-                                            @csrf
-                                            @method('PATCH')
-                                            <input type="hidden" name="status" value="Payée">
-                                            <button type="submit" class="dropdown-item">Payée</button>
-                                        </form>
-                                    </li>
-                                    <li>
-                                        <form action="{{ route('orders.update', $order->id) }}" method="POST" style="display:inline;">
-                                            @csrf
-                                            @method('PATCH')
-                                            <input type="hidden" name="status" value="Annulée">
-                                            <button type="submit" class="dropdown-item text-danger" onclick="return confirm('Êtes-vous sûr de vouloir annuler cette commande ?')">Annuler</button>
-                                        </form>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
-                    @endif
-
-                    <a href="{{ route('orders.index') }}" class="btn btn-secondary mt-4">Retour à la liste</a>
+                    <div class="text-center mt-4">
+                        <p>Merci de nous avoir choisis !</p>
+                        <p>Contactez-nous à <strong>msarmoustapha@gmail.com</strong> ou au <strong>709641912</strong> pour toute question.</p>
+                    </div>
                 </div>
+            </div>
+
+            <div class="mt-4">
+                <a href="{{ route('orders.index') }}" class="btn btn-secondary">Retour</a>
             </div>
         </div>
     </div>

@@ -169,10 +169,13 @@
             min-height: 300px;
             display: flex;
             flex-direction: column;
+            /* Nouvelle échelle après augmentation de 1/3 : 0.5333 * (4/3) ≈ 0.7111 */
+            transform: scale(0.7111);
+            transform-origin: top left; /* Point de référence pour la réduction */
         }
 
         .food-card:hover {
-            transform: translateY(-10px);
+            transform: scale(0.7111) translateY(-10px); /* Ajuster l'effet de survol pour tenir compte de la nouvelle échelle */
             box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1);
         }
 
@@ -250,6 +253,12 @@
             background-color: #f0f0f0;
             border-color: #f0f0f0;
             color: var(--text-dark);
+        }
+
+        /* Rendre les boutons "Détails" et "Commander" responsifs par rapport à la taille de la carte */
+        .food-content .btn {
+            font-size: 0.9em; /* Taille relative par rapport à la carte */
+            padding: 0.3em 0.6em; /* Padding relatif */
         }
 
         .tutorial-card {

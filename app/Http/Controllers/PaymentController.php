@@ -14,8 +14,7 @@ class PaymentController extends Controller
     {
         // Applique le middleware 'auth' à toutes les méthodes
         $this->middleware('auth');
-        // Applique le middleware 'role:gestionnaire' à toutes les méthodes sauf 'index'
-        $this->middleware('role:gestionnaire')->except('index');
+        // Plus besoin d'exclure 'index', car la logique est gérée dans web.php
     }
 
     /**
@@ -70,7 +69,8 @@ class PaymentController extends Controller
      */
     public function show(string $id)
     {
-        //
+        $payment = Payment::with('order')->findOrFail($id);
+        return view('gestionnaire.payments.show', compact('payment'));
     }
 
     /**
@@ -78,7 +78,9 @@ class PaymentController extends Controller
      */
     public function edit(string $id)
     {
-        //
+        $payment = Payment::findOrFail($id);
+        $orders = Order::whereDoesntHave('payment')->orWhere('id', $payment->order_id)->get();
+        return view('gestionnaire.payments.edit', compact('payment', 'orders'));
     }
 
     /**
@@ -86,7 +88,17 @@ class PaymentController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        //
+        $payment = Payment::findOrFail($id);
+
+        $validated = $request->validate([
+            'order_id' => 'required|exists:orders,id|unique:payments,order_id,' . $payment->id,
+            'amount' => 'required|numeric|min:0',
+            'status' => 'required|in:en_attente,réussi,échoué',
+        ]);
+
+        $payment->update($validated);
+
+        return redirect()->route('payments.index')->with('success', 'Paiement mis à jour avec succès');
     }
 
     /**
@@ -94,6 +106,9 @@ class PaymentController extends Controller
      */
     public function destroy(string $id)
     {
-        //
+        $payment = Payment::findOrFail($id);
+        $payment->delete();
+
+        return redirect()->route('payments.index')->with('success', 'Paiement supprimé avec succès');
     }
 }

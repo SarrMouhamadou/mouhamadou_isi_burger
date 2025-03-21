@@ -5,10 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use App\Models\Burger;
 use App\Models\Payment;
+use App\Mail\InvoiceMail;
 use App\Notifications\OrderReadyNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\DB;
 use PDF;
 
@@ -74,12 +76,22 @@ class OrderController extends Controller
             'status' => $request->status,
         ]);
 
-        // Si la commande est marquée comme "Payée", mettre à jour payment_date
-        if ($request->status === 'Payée' && $order->payment) {
-            $order->payment->update([
-                'status' => 'Payée',
-                'payment_date' => now(),
-            ]);
+        // Si la commande est marquée comme "Payée", mettre à jour payment_date et envoyer la facture
+        if ($request->status === 'Payée') {
+            if ($order->payment) {
+                $order->payment->update([
+                    'status' => 'Payée',
+                    'payment_date' => now(),
+                ]);
+            }
+
+            // Charger les relations nécessaires pour l'e-mail
+            $order->load('burgers', 'user');
+
+            // Envoyer la facture par e-mail au client
+            if ($order->user) {
+                Mail::to($order->user->email)->send(new InvoiceMail($order));
+            }
         }
 
         // Si la commande est marquée comme "Prête", notifier le client
@@ -155,12 +167,22 @@ class OrderController extends Controller
                 'status' => $request->status,
             ]);
 
-            // Si la commande est marquée comme "Payée", mettre à jour payment_date
-            if ($request->status === 'Payée' && $order->payment) {
-                $order->payment->update([
-                    'status' => 'Payée',
-                    'payment_date' => now(),
-                ]);
+            // Si la commande est marquée comme "Payée", mettre à jour payment_date et envoyer la facture
+            if ($request->status === 'Payée') {
+                if ($order->payment) {
+                    $order->payment->update([
+                        'status' => 'Payée',
+                        'payment_date' => now(),
+                    ]);
+                }
+
+                // Charger les relations nécessaires pour l'e-mail
+                $order->load('burgers', 'user');
+
+                // Envoyer la facture par e-mail au client
+                if ($order->user) {
+                    Mail::to($order->user->email)->send(new InvoiceMail($order));
+                }
             }
 
             // Si la commande est marquée comme "Prête", notifier le client
